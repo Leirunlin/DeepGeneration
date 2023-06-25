@@ -7,30 +7,30 @@ import matplotlib.pyplot as plt
 
 # Define the VAE model
 class VAE(nn.Module):
-    def __init__(self, input_dim, latent_dim, num_components,device):
+    def __init__(self, input_dim, latent_dim, device):
         super(VAE, self).__init__()
 
         self.device=device
         
         self.input_dim = input_dim
         self.latent_dim = latent_dim
-        self.num_components = num_components
+        self.scale = None
         
         # Encoder layers
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 16),
+            nn.Linear(input_dim, 64),
             nn.Tanh(),
         )
         
         # Latent layers
-        self.mean = nn.Linear(16, latent_dim)
-        self.log_var = nn.Linear(16, latent_dim)
+        self.mean = nn.Linear(64, latent_dim)
+        self.log_var = nn.Linear(64, latent_dim)
         
         # Decoder layers
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 16),
+            nn.Linear(latent_dim, 64),
             nn.Tanh(),
-            nn.Linear(16, input_dim),
+            nn.Linear(64, input_dim),
             nn.Tanh()
         )
 
@@ -50,14 +50,17 @@ class VAE(nn.Module):
         return self.decoder(z)
 
     def forward(self, x):
+        if self.scale is None:
+            self.scale = torch.max(x) 
+        x = x / self.scale
         mean, log_var = self.encode(x)
         z = self.reparameterize(mean, log_var)
-        x_hat = self.decode(z)
+        x_hat = self.decode(z) * self.scale
         return x_hat, mean, log_var
 
     def sample(self, num_samples):
         z = torch.randn(num_samples, self.latent_dim).to(self.device)
-        samples = self.decode(z)
+        samples = self.decode(z) * self.scale
         return samples
 
 
@@ -65,8 +68,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Prepare the data
 train_data = torch.load("./data/train/train_data.pt").to(device)
-scale = torch.max(train_data)
-train_data = train_data / scale
+#scale = torch.max(train_data)
+train_data = train_data
 plt.scatter(train_data[:, 0].cpu().detach().numpy(), train_data[:, 1].cpu().detach().numpy())
 plt.xlabel('x')
 plt.ylabel('y')
@@ -77,17 +80,16 @@ plt.close()
 # Set hyperparameters
 input_dim = 2
 latent_dim = 2
-num_components = 36
-epochs = 1000
+epochs = 10000
 
 # Initialize the VAE model
-vae = VAE(input_dim, latent_dim, num_components,device).to(device)
+vae = VAE(input_dim, latent_dim, device).to(device)
 
 # Define the loss function
-reconstruction_loss = nn.MSELoss()
+reconstruction_loss = nn.()
 
 # Define the optimizer
-optimizer = optim.Adam(vae.parameters(), lr=0.01)
+optimizer = optim.Adam(vae.parameters(), lr=0.001)
 
 # Training loop
 for epoch in range(epochs):
@@ -95,18 +97,16 @@ for epoch in range(epochs):
     optimizer.zero_grad()
     inputs = train_data
     x_hat, mean, log_var = vae(inputs)
-    if epoch % 100 == 0:
-        plt.scatter((x_hat[:, 0]*scale).cpu().detach().numpy(), (x_hat[:, 1]*scale).cpu().detach().numpy())
+    if epoch % 1000 == 0:
+        plt.scatter(x_hat[:, 0].cpu().detach().numpy(), x_hat[:, 1].cpu().detach().numpy())
         plt.xlabel('x')
         plt.ylabel('y')
         plt.title('Scatter plot of samples')
         plt.savefig(f"./figs/train_vae_{epoch}.png")
         plt.close()
-
     recon_loss = reconstruction_loss(x_hat, inputs)
     kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-    print(recon_loss.item())
-    loss = recon_loss + 0.0001 * kl_loss
+    loss = recon_loss + 0.01*kl_loss
     loss.backward()
     optimizer.step()
     print(f"Epoch {epoch+1}: Loss = {loss.item()}")
@@ -131,7 +131,7 @@ with torch.no_grad():
     x_hat, mean, log_var = vae(inputs)
     recon_loss = reconstruction_loss(x_hat, inputs)
     kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-    loss = recon_loss + kl_loss
+    loss = recon_loss + kl_loss 
     total_loss += loss.item() * inputs.size(0)
         
     average_loss = total_loss / len(test_data)
