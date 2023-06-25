@@ -18,9 +18,7 @@ class VAE(nn.Module):
         
         # Encoder layers
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.Tanh(),
-            nn.Linear(128, 64),
+            nn.Linear(input_dim, 64),
             nn.Tanh(),
         )
         
@@ -32,9 +30,7 @@ class VAE(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(latent_dim, 64),
             nn.Tanh(),
-            nn.Linear(64, 128),
-            nn.Tanh(),
-            nn.Linear(128, input_dim),
+            nn.Linear(64, input_dim),
             nn.Tanh()
         )
 
@@ -110,7 +106,7 @@ for epoch in range(epochs):
         plt.close()
     recon_loss = reconstruction_loss(x_hat, inputs)
     kl_loss = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
-    loss = recon_loss +0.01*kl_loss
+    loss = recon_loss + 0.01*kl_loss
     loss.backward()
     optimizer.step()
     print(f"Epoch {epoch+1}: Loss = {loss.item()}")
